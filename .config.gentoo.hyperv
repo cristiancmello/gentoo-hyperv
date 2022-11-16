@@ -1,148 +1,3 @@
-
-
-```bash
-5 # Keyboard Layout ABNT-2
-passwd # escolha 'root'
-rc-service sshd start
-ip addr show eth0
-ip route get 1.2.3.4 | awk '{print $7}' # alternativa futura para automatizar
-
-fdisk /dev/sda
-mkfs.vfat -F 32 /dev/sda1
-mkfs.ext4 /dev/sda3
-mkswap /dev/sda2
-swapon /dev/sda2
-mount /dev/sda3 /mnt/gentoo
-
-ntpd -q -g
-cd /mnt/gentoo
-wget http://gentoo.c3sl.ufpr.br/releases/amd64/autobuilds/current-stage3-amd64-desktop-openrc/stage3-amd64-desktop-openrc-20221030T170552Z.tar.xz
-tar xpvf stage3-*.tar.xz --xattrs-include='*.*' --numeric-owner
-nano -w /mnt/gentoo/etc/portage/make.conf
->>> COMMON_FLAGS="-march=tigerlake -O2 -pipe"
->>> MAKEOPTS="-j17"
-
-mirrorselect -i -o >> /mnt/gentoo/etc/portage/make.conf
-mkdir --parents /mnt/gentoo/etc/portage/repos.conf
-cp /mnt/gentoo/usr/share/portage/config/repos.conf /mnt/gentoo/etc/portage/repos.conf/gentoo.conf
-cp --dereference /etc/resolv.conf /mnt/gentoo/etc/
-mount --types proc /proc /mnt/gentoo/proc
-mount --rbind /sys /mnt/gentoo/sys
-mount --make-rslave /mnt/gentoo/sys
-mount --rbind /dev /mnt/gentoo/dev
-mount --make-rslave /mnt/gentoo/dev
-mount --bind /run /mnt/gentoo/run
-mount --make-slave /mnt/gentoo/run
-chroot /mnt/gentoo /bin/bash
-source /etc/profile
-export PS1="(chroot) ${PS1}"
-mount /dev/sda1 /boot
-emerge-webrsync
-eselect profile list
-eselect profile set 1 # [1]   default/linux/amd64/17.1 (stable)
-emerge --verbose --update --deep --newuse @world
-emerge app-portage/cpuid2cpuflags
-echo "*/* $(cpuid2cpuflags)" > /etc/portage/package.use/00cpu-flags
-nano -w /etc/portage/make.conf
->>> ACCEPT_LICENSE="-* @FREE @BINARY-REDISTRIBUTABLE"
-
-echo "Brazil/East" > /etc/timezone
-emerge --config sys-libs/timezone-data
-nano -w /etc/locale.gen
->>> en_US ISO-8859-1
->>> en_US.UTF-8 UTF-8
-
-locale-gen
-eselect locale list
-eselect locale set 6
-env-update && source /etc/profile && export PS1="(chroot) ${PS1}"
-emerge sys-kernel/gentoo-sources
-eselect kernel list  # [1]   linux-5.15.75-gentoo
-eselect kernel set 1
-ls -l /usr/src/linux
-emerge sys-apps/pciutils
-cd /usr/src/linux
-make menuconfig
->>> PARAVIRT             (CONFIG_PARAVIRT=y)
->>> PARAVIRT_SPINLOCKS   (CONFIG_PARAVIRT_SPINLOCKS=y)
->>> ACPI                 (CONFIG_ACPI=y)
->>> PCI                  (CONFIG_PCI=y)
->>> PCI_MSI              (CONFIG_PCI_MSI=y)
->>> PCI_HYPERV           (CONFIG_PCI_HYPERV=y)
->>> PCI_HYPERV_INTERFACE (CONFIG_PCI_HYPERV_INTERFACE=y)
->>> VSOCKETS             (CONFIG_VSOCKETS=y)
->>> VSOCKETS_DIAG        (CONFIG_VSOCKETS_DIAG=y)
->>> VSOCKETS_LOOPBACK    (CONFIG_VSOCKETS_LOOPBACK=y)
->>> HYPERV_VSOCKETS      (CONFIG_HYPERV_VSOCKETS=y)
->>> HYPERV_KEYBOARD      (CONFIG_HYPERV_KEYBOARD=y)
->>> SCSI_FC_ATTRS        (CONFIG_SCSI_FC_ATTRS=y)
->>> SCSI_LOWLEVEL        (CONFIG_SCSI_LOWLEVEL=y)
->>> HYPERV_STORAGE       (CONFIG_HYPERV_STORAGE=y)
->>> HYPERV_NET           (CONFIG_HYPERV_NET=y)
->>> FB                   (CONFIG_FB=y)
->>> FB_HYPERV            (CONFIG_FB_HYPERV=y)
->>> DRM_HYPERV           (CONFIG_DRM_HYPERV=y)
->>> HID                  (CONFIG_HID=y)
->>> HID_HYPERV_MOUSE     (CONFIG_HID_HYPERV_MOUSE=y)
->>> HYPERVISOR_GUEST     (CONFIG_HYPERVISOR_GUEST=y)
->>> HYPERV               (CONFIG_HYPERV=y)
->>> HYPERV_BALLOON       (CONFIG_HYPERV_BALLOON=y)
->>> HYPERV_IOMMU         (CONFIG_HYPERV_IOMMU=y)
->>> HYPERV_TESTING       (CONFIG_HYPERV_TESTING=y)
->>> HYPERV_TIMER         (CONFIG_HYPERV_TIMER=y)
->>> HYPERV_UTILS         (CONFIG_HYPERV_UTILS=y)
->>> PCI_HYPERV_INTERFACE (CONFIG_PCI_HYPERV_INTERFACE=y)
-
-make -j17 && make modules_install
-make install
-emerge sys-kernel/dracut
-dracut --kver=5.15.75-gentoo
-ls /boot/initramfs*
-blkid
-nano -w /etc/fstab
->>> /dev/sda1   /boot        vfat    defaults,noatime     0 2
->>> /dev/sda2   none         swap    sw                   0 0
->>> /dev/sda3   /            ext4    noatime              0 1
->>> /dev/cdrom  /mnt/cdrom   auto    noauto,user          0 0
-
-nano -w /etc/conf.d/hostname
->>> hostname="gentoo-hyperv"
-passwd # user: root; pass: Weird_tile4ordeal
-emerge app-admin/sysklogd
-rc-update add sysklogd default
-emerge sys-apps/mlocate
-rc-update add sshd default
-nano -w /etc/inittab
->>> # SERIAL CONSOLES
->>> s0:12345:respawn:/sbin/agetty 9600 ttyS0 vt100
->>> s1:12345:respawn:/sbin/agetty 9600 ttyS1 vt100
-
-emerge net-misc/chrony
-rc-update add chronyd default
-emerge net-misc/dhcpcd
-emerge --verbose sys-boot/grub
-echo 'GRUB_PLATFORMS="efi-64"' >> /etc/portage/make.conf
-emerge sys-boot/grub
-grub-install --target=x86_64-efi --efi-directory=/boot
-grub-mkconfig -o /boot/grub/grub.cfg
-exit
-umount -l /mnt/gentoo/dev{/shm,/pts,}
-umount -R /mnt/gentoo
-reboot
-```
-
-
-* Post installations
-
-```bash
-# TODO: fazer limpeza
-emerge app-editors/vim app-admin/sudo
-# TODO: criar um usuário sudo 'gen' para trabalho do dia a dia
-# TODO: add docker
-```
-
-* Exemplo de config do kernel customizado para HyperV
-```.config
 #
 # Automatically generated file; DO NOT EDIT.
 # Linux/x86 5.15.75-gentoo Kernel Configuration
@@ -343,12 +198,12 @@ CONFIG_RELAY=y
 CONFIG_BLK_DEV_INITRD=y
 CONFIG_INITRAMFS_SOURCE=""
 CONFIG_RD_GZIP=y
-CONFIG_RD_BZIP2=y
-CONFIG_RD_LZMA=y
-CONFIG_RD_XZ=y
-CONFIG_RD_LZO=y
-CONFIG_RD_LZ4=y
-CONFIG_RD_ZSTD=y
+# CONFIG_RD_BZIP2 is not set
+# CONFIG_RD_LZMA is not set
+# CONFIG_RD_XZ is not set
+# CONFIG_RD_LZO is not set
+# CONFIG_RD_LZ4 is not set
+# CONFIG_RD_ZSTD is not set
 # CONFIG_BOOT_CONFIG is not set
 CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE=y
 # CONFIG_CC_OPTIMIZE_FOR_SIZE is not set
@@ -4763,14 +4618,11 @@ CONFIG_CRC32_SLICEBY8=y
 # CONFIG_CRC7 is not set
 # CONFIG_LIBCRC32C is not set
 # CONFIG_CRC8 is not set
-CONFIG_XXHASH=y
 # CONFIG_RANDOM32_SELFTEST is not set
 CONFIG_ZLIB_INFLATE=y
 CONFIG_ZLIB_DEFLATE=y
 CONFIG_LZO_COMPRESS=y
 CONFIG_LZO_DECOMPRESS=y
-CONFIG_LZ4_DECOMPRESS=y
-CONFIG_ZSTD_DECOMPRESS=y
 CONFIG_XZ_DEC=y
 CONFIG_XZ_DEC_X86=y
 CONFIG_XZ_DEC_POWERPC=y
@@ -4781,12 +4633,6 @@ CONFIG_XZ_DEC_SPARC=y
 CONFIG_XZ_DEC_BCJ=y
 # CONFIG_XZ_DEC_TEST is not set
 CONFIG_DECOMPRESS_GZIP=y
-CONFIG_DECOMPRESS_BZIP2=y
-CONFIG_DECOMPRESS_LZMA=y
-CONFIG_DECOMPRESS_XZ=y
-CONFIG_DECOMPRESS_LZO=y
-CONFIG_DECOMPRESS_LZ4=y
-CONFIG_DECOMPRESS_ZSTD=y
 CONFIG_GENERIC_ALLOCATOR=y
 CONFIG_INTERVAL_TREE=y
 CONFIG_ASSOCIATIVE_ARRAY=y
@@ -5139,7 +4985,7 @@ CONFIG_RUNTIME_TESTING_MENU=y
 # CONFIG_TEST_CLOCKSOURCE_WATCHDOG is not set
 CONFIG_ARCH_USE_MEMTEST=y
 # CONFIG_MEMTEST is not set
-CONFIG_HYPERV_TESTING=y
+# CONFIG_HYPERV_TESTING is not set
 # end of Kernel Testing and Coverage
 # end of Kernel hacking
 
@@ -5158,6 +5004,5 @@ CONFIG_GENTOO_LINUX_INIT_SCRIPT=y
 # end of Support for init systems, system and service managers
 
 # CONFIG_GENTOO_KERNEL_SELF_PROTECTION is not set
-# CONFIG_GENTOO_PRINT_FIRMWARE_INFO is not set
+CONFIG_GENTOO_PRINT_FIRMWARE_INFO=y
 # end of Gentoo Linux
-```
